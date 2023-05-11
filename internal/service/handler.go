@@ -25,6 +25,14 @@ func handlerMessage(message []byte) (resp []byte) {
 		{
 			return ctrl.AdminCtrl().Code(message)
 		}
+	case request.MessageUserLogin:
+		{
+			return ctrl.UserCtrl().Login(message)
+		}
+	case request.MessageUserLogout:
+		{
+			return ctrl.UserCtrl().Offline(message)
+		}
 	}
 	return
 }

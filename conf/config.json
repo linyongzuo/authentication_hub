@@ -3,7 +3,16 @@
     "port": 3306,
     "host": "127.0.0.1",
     "username": "root",
-    "password": "123456"
+    "password": "123456",
+    "databaseName": "authentication_hub"
+  },
+  "redisCfg": {
+    "port": 6379,
+    "host": "127.0.0.1",
+    "username": "",
+    "password": "",
+    "db": 1,
+    "poolSize": 20
   },
   "ServerCfg": {
     "port": 10080

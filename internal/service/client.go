@@ -2,11 +2,17 @@ package service
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"github.com/authentication_hub/global"
+	"github.com/authentication_hub/internal/constants"
+	"github.com/authentication_hub/internal/domain/request"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"log"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,6 +28,8 @@ const (
 
 	// Maximum message size allowed from peer.
 	maxMessageSize = 512
+
+	heartbeatTime = 10 * time.Second
 )
 
 var (
@@ -41,6 +49,14 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	receive chan []byte
+
+	offlineChan chan []byte
+
+	stopChan chan struct{}
+
+	online atomic.Bool
+
+	ip string
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -50,11 +66,7 @@ type Client struct {
 // reads from this goroutine.
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
-		err := c.conn.Close()
-		if err != nil {
-			return
-		}
+		c.offline()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	err := c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -85,10 +97,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		err := c.conn.Close()
-		if err != nil {
-			logrus.Errorf("close failed")
-		}
+		c.offline()
 	}()
 	for {
 		select {
@@ -115,6 +124,22 @@ func (c *Client) writePump() {
 			if err = w.Close(); err != nil {
 				return
 			}
+		case message, ok := <-c.offlineChan:
+			{
+				if !ok {
+					return
+				}
+				handlerMessage(message)
+				if c.online.Load() {
+					c.stopChan <- struct{}{}
+					c.hub.unregister <- c
+					err := c.conn.Close()
+					if err != nil {
+						logrus.Errorf("close failed")
+					}
+					c.online.Swap(false)
+				}
+			}
 		case <-ticker.C:
 			err := c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err != nil {
@@ -127,6 +152,57 @@ func (c *Client) writePump() {
 	}
 }
 
+func (c *Client) heartbeatCheck() {
+	ticker := time.NewTicker(heartbeatTime)
+	defer func() {
+		ticker.Stop()
+	}()
+	for {
+		select {
+		case <-c.stopChan:
+			return
+		case <-ticker.C:
+			logrus.Info("检测心跳")
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			// 按前缀扫描key
+			stringCmd := global.Rdb.HGet(ctx, c.ip, constants.KActiveTime)
+			lastTime, err := stringCmd.Result()
+			if err != nil {
+				continue
+			}
+			activeTime, err := time.ParseInLocation(constants.KTimeTemplate, lastTime, time.Local)
+			if err != nil {
+				logrus.Errorf("解析时间出错:%s", err.Error())
+				continue
+			}
+			if time.Now().Sub(activeTime).Seconds() > 60 {
+				logrus.Info("客户端掉线")
+				c.offline()
+				return
+			}
+
+		}
+	}
+}
+func (c *Client) offline() {
+	if !c.online.Load() {
+		return
+	}
+	logrus.Infof("有机器下线:%s", c.ip)
+	req := request.UserLogoutReq{
+		Header: request.Header{
+			Version:     "",
+			MessageType: request.MessageUserLogout,
+		},
+		Mac:    "",
+		Ip:     c.ip,
+		System: true,
+	}
+	message, _ := json.Marshal(req)
+	c.offlineChan <- message
+}
+
 // serveWs handles websocket requests from the peer.
 func connect(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := global.Upgrader.Upgrade(w, r, nil)
@@ -134,11 +210,18 @@ func connect(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 1024), receive: make(chan []byte, 1024)}
+	ip := conn.RemoteAddr().String()
+	address := strings.Split(ip, ":")
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	global.Rdb.HSet(ctx, address[0], constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 1024), receive: make(chan []byte, 1024), stopChan: make(chan struct{}), offlineChan: make(chan []byte, 1024), online: atomic.Bool{}, ip: address[0]}
+	client.online.Store(true)
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
 	go client.writePump()
+	go client.heartbeatCheck()
 	go client.readPump()
 }

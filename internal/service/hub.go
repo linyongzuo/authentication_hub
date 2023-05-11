@@ -31,6 +31,8 @@ func (h *Hub) run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				close(client.receive)
+				close(client.offlineChan)
 			}
 		}
 	}

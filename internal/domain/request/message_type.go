@@ -7,4 +7,6 @@ const (
 	MessageHeartbeat         MessageType = 1
 	MessageAdminLogin        MessageType = 2
 	MessageAdminGenerateCode MessageType = 3
+	MessageUserLogin         MessageType = 4
+	MessageUserLogout        MessageType = 5
 )
