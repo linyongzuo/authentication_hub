@@ -2,13 +2,11 @@ package request
 
 type AdminLoginReq struct {
 	Header
-	UserName string `json:"userName"`
-	Password string `json:"password"`
+	UserName string `json:"userName"` // 用户名
+	Password string `json:"password"` // 密码
 }
 
 type UserLoginReq struct {
 	Header
-	Mac  string `json:"mac"`
-	Ip   string `json:"ip"`
-	Code string `json:"code"`
+	Code string `json:"code"` // 生成的code
 }

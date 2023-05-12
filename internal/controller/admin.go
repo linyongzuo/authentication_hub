@@ -21,11 +21,40 @@ type AdminCtrl struct {
 }
 
 func (u *AdminCtrl) Login(message []byte) (resp []byte) {
-	_ = json.Unmarshal(message, &request.AdminLoginReq{})
-
+	adminLoginResponse := &response.AdminLoginResponse{
+		BaseResp: response.BaseResp{
+			Code:    "200",
+			Message: "登陆成功",
+		},
+		UserName: "",
+	}
+	adminLoginReq := &request.AdminLoginReq{}
+	defer func() {
+		resp, _ = json.Marshal(adminLoginResponse)
+		return
+	}()
+	err := json.Unmarshal(message, adminLoginReq)
+	if err != nil {
+		if err != nil {
+			adminLoginResponse.Code = "400"
+			adminLoginResponse.Message = "请求参数错误:" + err.Error()
+		}
+		return
+	}
+	adminLoginResponse.UserName = adminLoginReq.UserName
+	_, err = u.adminIer.Get(u.db, &entity.Admin{
+		UserName: adminLoginReq.UserName,
+		Password: adminLoginReq.Password,
+	})
+	if err != nil {
+		adminLoginResponse.Code = "404"
+		adminLoginResponse.Message = "用户民密码错误:" + err.Error()
+	}
+	adminLoginResponse.UserName = adminLoginReq.UserName
 	return
 }
 func (u *AdminCtrl) Code(message []byte) (resp []byte) {
+
 	generateCodeResponse := &response.GenerateCodeResponse{
 		BaseResp: response.BaseResp{
 			Code:    "200",

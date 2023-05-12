@@ -189,7 +189,7 @@ func (c *Client) offline() {
 	if !c.online.Load() {
 		return
 	}
-	logrus.Infof("有机器下线:%s", c.ip)
+	logrus.Infof("客户端下线:%s", c.ip)
 	req := request.UserLogoutReq{
 		Header: request.Header{
 			Version:     "",
@@ -205,6 +205,7 @@ func (c *Client) offline() {
 
 // serveWs handles websocket requests from the peer.
 func connect(hub *Hub, w http.ResponseWriter, r *http.Request) {
+
 	conn, err := global.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -217,6 +218,7 @@ func connect(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	global.Rdb.HSet(ctx, address[0], constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 1024), receive: make(chan []byte, 1024), stopChan: make(chan struct{}), offlineChan: make(chan []byte, 1024), online: atomic.Bool{}, ip: address[0]}
 	client.online.Store(true)
+	logrus.Infof("有客户端连接:%s", address[0])
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
