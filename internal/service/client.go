@@ -127,16 +127,18 @@ func (c *Client) writePump() {
 		case message, ok := <-c.offlineChan:
 			{
 				if !ok {
+					logrus.Info("读取离线消息失败")
 					return
 				}
 				handlerMessage(message)
 				if c.online.Load() {
-					c.stopChan <- struct{}{}
-					c.hub.unregister <- c
 					err := c.conn.Close()
 					if err != nil {
-						logrus.Errorf("close failed")
+						logrus.Errorf("关闭链接失败")
 					}
+					logrus.Info("关闭当前链接")
+					c.stopChan <- struct{}{}
+					c.hub.unregister <- c
 					c.online.Swap(false)
 				}
 			}

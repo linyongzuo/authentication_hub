@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"net/http"
 )
 
 type DatabaseConfig struct {
@@ -41,7 +42,8 @@ var (
 	Rdb    *redis.Client
 )
 var Upgrader = websocket.Upgrader{ReadBufferSize: 1024,
-	WriteBufferSize: 1024}
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true }}
 
 func init() {
 	Cfg = &Configs{}

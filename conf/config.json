@@ -15,6 +15,6 @@
     "poolSize": 20
   },
   "ServerCfg": {
-    "port": 10080
+    "port": 1000
   }
 }
