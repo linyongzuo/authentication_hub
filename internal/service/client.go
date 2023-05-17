@@ -164,7 +164,7 @@ func (c *Client) heartbeatCheck() {
 		case <-c.stopChan:
 			return
 		case <-ticker.C:
-			logrus.Info("检测心跳")
+			logrus.Info("检测心跳,检测地址:%s", c.ip)
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 			// 按前缀扫描key
@@ -178,7 +178,9 @@ func (c *Client) heartbeatCheck() {
 				logrus.Errorf("解析时间出错:%s", err.Error())
 				continue
 			}
-			if time.Now().Sub(activeTime).Seconds() > 60 {
+			now := time.Now()
+			logrus.Infof("当前时间:%s,最后一次心跳时间:%s", now.Format(constants.KTimeTemplate), lastTime)
+			if now.Sub(activeTime).Seconds() > 60 {
 				logrus.Info("客户端掉线")
 				c.offline()
 				return
