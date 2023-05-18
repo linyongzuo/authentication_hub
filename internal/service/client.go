@@ -56,7 +56,7 @@ type Client struct {
 
 	online atomic.Bool
 
-	ip string
+	mac string
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -116,7 +116,8 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			_, err = w.Write(handlerMessage(message))
+			resp := c.handlerMessage(message)
+			_, err = w.Write(resp)
 			if err != nil {
 				return
 			}
@@ -130,7 +131,7 @@ func (c *Client) writePump() {
 					logrus.Info("读取离线消息失败")
 					return
 				}
-				handlerMessage(message)
+				c.handlerMessage(message)
 				if c.online.Load() {
 					err := c.conn.Close()
 					if err != nil {
@@ -164,28 +165,32 @@ func (c *Client) heartbeatCheck() {
 		case <-c.stopChan:
 			return
 		case <-ticker.C:
-			logrus.Info("检测心跳,检测地址:%s", c.ip)
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-			// 按前缀扫描key
-			stringCmd := global.Rdb.HGet(ctx, c.ip, constants.KActiveTime)
-			lastTime, err := stringCmd.Result()
-			if err != nil {
-				continue
+			if c.mac != "" {
+				logrus.Infof("检测心跳,检测地址:%s", c.mac)
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				defer cancel()
+				// 按前缀扫描key
+				stringCmd := global.Rdb.HGet(ctx, c.mac, constants.KActiveTime)
+				lastTime, err := stringCmd.Result()
+				if err != nil {
+					continue
+				}
+				if lastTime == "" {
+					continue
+				}
+				activeTime, err := time.ParseInLocation(constants.KTimeTemplate, lastTime, time.Local)
+				if err != nil {
+					logrus.Errorf("解析时间出错:%s", err.Error())
+					continue
+				}
+				now := time.Now()
+				logrus.Infof("当前时间:%s,最后一次心跳时间:%s", now.Format(constants.KTimeTemplate), lastTime)
+				if now.Sub(activeTime).Seconds() > 60 {
+					logrus.Info("客户端掉线")
+					c.offline()
+					return
+				}
 			}
-			activeTime, err := time.ParseInLocation(constants.KTimeTemplate, lastTime, time.Local)
-			if err != nil {
-				logrus.Errorf("解析时间出错:%s", err.Error())
-				continue
-			}
-			now := time.Now()
-			logrus.Infof("当前时间:%s,最后一次心跳时间:%s", now.Format(constants.KTimeTemplate), lastTime)
-			if now.Sub(activeTime).Seconds() > 60 {
-				logrus.Info("客户端掉线")
-				c.offline()
-				return
-			}
-
 		}
 	}
 }
@@ -193,14 +198,13 @@ func (c *Client) offline() {
 	if !c.online.Load() {
 		return
 	}
-	logrus.Infof("客户端下线:%s", c.ip)
+	logrus.Infof("客户端下线:%s", c.mac)
 	req := request.UserLogoutReq{
 		Header: request.Header{
 			Version:     "",
 			MessageType: request.MessageUserLogout,
 		},
-		Mac:    "",
-		Ip:     c.ip,
+		Mac:    c.mac,
 		System: true,
 	}
 	message, _ := json.Marshal(req)
@@ -215,14 +219,17 @@ func connect(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
+	macAddress := r.Header.Get(constants.KMac)
+	if macAddress != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		global.Rdb.HSet(ctx, macAddress, constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
+	}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 1024), receive: make(chan []byte, 1024), stopChan: make(chan struct{}), offlineChan: make(chan []byte, 1024), online: atomic.Bool{}, mac: macAddress}
+	client.online.Store(true)
 	ip := conn.RemoteAddr().String()
 	address := strings.Split(ip, ":")
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	global.Rdb.HSet(ctx, address[0], constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 1024), receive: make(chan []byte, 1024), stopChan: make(chan struct{}), offlineChan: make(chan []byte, 1024), online: atomic.Bool{}, ip: address[0]}
-	client.online.Store(true)
-	logrus.Infof("有客户端连接:%s", address[0])
+	logrus.Infof("有客户端连接:%s,地址:%s", address, macAddress)
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in

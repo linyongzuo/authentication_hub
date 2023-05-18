@@ -6,7 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func handlerMessage(message []byte) (resp []byte) {
+func (c *Client) handlerMessage(message []byte) (resp []byte) {
 	header := request.Header{}
 	err := json.Unmarshal(message, &header)
 	if err != nil {
@@ -15,7 +15,8 @@ func handlerMessage(message []byte) (resp []byte) {
 	switch header.MessageType {
 	case request.MessageHeartbeat:
 		{
-			return ctrl.UserIer.Heartbeat(message)
+			resp, _ = ctrl.UserCtrl().Heartbeat(message)
+			return resp
 		}
 	case request.MessageAdminLogin:
 		{
@@ -27,7 +28,8 @@ func handlerMessage(message []byte) (resp []byte) {
 		}
 	case request.MessageUserLogin:
 		{
-			return ctrl.UserCtrl().Login(message)
+			resp, c.mac = ctrl.UserCtrl().Login(message)
+			return resp
 		}
 	case request.MessageUserLogout:
 		{

@@ -16,8 +16,8 @@ import (
 )
 
 type UserIer interface {
-	Heartbeat([]byte) []byte
-	Login([]byte) []byte
+	Heartbeat([]byte) ([]byte, string)
+	Login([]byte) ([]byte, string)
 	Offline([]byte) []byte
 }
 type UserCtrl struct {
@@ -25,7 +25,7 @@ type UserCtrl struct {
 	userIer persistence.UserIer
 }
 
-func (u *UserCtrl) Heartbeat(message []byte) (resp []byte) {
+func (u *UserCtrl) Heartbeat(message []byte) (resp []byte, mac string) {
 	logrus.Infof("心跳:%s", string(message))
 	heartbeatResp := &response.HeartbeatResp{
 		BaseResp: response.BaseResp{
@@ -44,12 +44,20 @@ func (u *UserCtrl) Heartbeat(message []byte) (resp []byte) {
 		heartbeatResp.Message = "解析请求失败"
 		return
 	}
+	user := &entity.User{}
+	_, err = u.userIer.Get(u.db, user, filter.WithMac(req.Mac))
+	if err != nil && err == gorm.ErrRecordNotFound {
+		heartbeatResp.Code = "400"
+		heartbeatResp.Message = "该设备未认证，请认证！"
+		return
+	}
+	mac = req.Mac
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	global.Rdb.HSet(ctx, req.Ip, constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
+	global.Rdb.HSet(ctx, req.Mac, constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
 	return
 }
-func (u *UserCtrl) Login(message []byte) (resp []byte) {
+func (u *UserCtrl) Login(message []byte) (resp []byte, mac string) {
 	userLoginResp := &response.UserLoginResponse{
 		BaseResp: response.BaseResp{
 			Code:    "200",
@@ -103,6 +111,10 @@ func (u *UserCtrl) Login(message []byte) (resp []byte) {
 			return
 		}
 	}
+	mac = req.Mac
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	global.Rdb.HSet(ctx, req.Mac, constants.KActiveTime, time.Now().Format(constants.KTimeTemplate))
 	return
 }
 func (u *UserCtrl) Offline(message []byte) (resp []byte) {
