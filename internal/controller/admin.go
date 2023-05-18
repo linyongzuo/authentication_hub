@@ -1,18 +1,23 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/authentication_hub/global"
 	"github.com/authentication_hub/internal/domain/request"
 	"github.com/authentication_hub/internal/domain/response"
 	"github.com/authentication_hub/internal/repository/entity"
+	"github.com/authentication_hub/internal/repository/filter"
 	"github.com/authentication_hub/internal/repository/persistence"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 type AdminIer interface {
 	Login([]byte) []byte
 	Code([]byte) []byte
+	UserInfo([]byte) []byte
 }
 type AdminCtrl struct {
 	db       *gorm.DB
@@ -23,8 +28,9 @@ type AdminCtrl struct {
 func (u *AdminCtrl) Login(message []byte) (resp []byte) {
 	adminLoginResponse := &response.AdminLoginResponse{
 		BaseResp: response.BaseResp{
-			Code:    "200",
-			Message: "登陆成功",
+			Code:        "200",
+			Message:     "登陆成功",
+			MessageType: request.MessageAdminLogin,
 		},
 		UserName: "",
 	}
@@ -57,8 +63,9 @@ func (u *AdminCtrl) Code(message []byte) (resp []byte) {
 
 	generateCodeResponse := &response.GenerateCodeResponse{
 		BaseResp: response.BaseResp{
-			Code:    "200",
-			Message: "生成成功",
+			Code:        "200",
+			Message:     "生成成功",
+			MessageType: request.MessageAdminGenerateCode,
 		},
 	}
 	defer func() {
@@ -95,5 +102,30 @@ func (u *AdminCtrl) Code(message []byte) (resp []byte) {
 		generateCodeResponse.Message = "服务器保存失败"
 	}
 	generateCodeResponse.Codes = codes
+	return
+}
+func (u *AdminCtrl) UserInfo(message []byte) (resp []byte) {
+	userInfo := &response.UserInfoResponse{
+		BaseResp: response.BaseResp{
+			Code:        "200",
+			Message:     "获取成功",
+			MessageType: request.MessageUserInfo,
+		},
+	}
+	defer func() {
+		resp, _ = json.Marshal(userInfo)
+		return
+	}()
+	count, err := u.userIer.Count(u.db, &entity.User{}, filter.WithUsed())
+	if err != nil {
+		userInfo.Code = "400"
+		userInfo.Message = "获取注册人数失败:" + err.Error()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	keys := global.Rdb.Keys(ctx, "*").Val()
+	userInfo.OnlineCount = len(keys)
+	userInfo.RegisterCount = int(count)
+	userInfo.OfflineCount = userInfo.RegisterCount - userInfo.OnlineCount
 	return
 }

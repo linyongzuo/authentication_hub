@@ -26,3 +26,9 @@ func WithIp(ip string) func(db *gorm.DB) *gorm.DB {
 		return db
 	}
 }
+func WithUsed() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		db = db.Where("f_use", 1)
+		return db
+	}
+}

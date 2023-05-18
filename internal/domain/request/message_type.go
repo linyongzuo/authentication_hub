@@ -9,4 +9,5 @@ const (
 	MessageAdminGenerateCode MessageType = 3
 	MessageUserLogin         MessageType = 4
 	MessageUserLogout        MessageType = 5
+	MessageUserInfo          MessageType = 6
 )

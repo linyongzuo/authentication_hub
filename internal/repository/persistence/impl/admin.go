@@ -33,3 +33,11 @@ func (a *AdminIerImpl) Get(tx *gorm.DB, in *entity.Admin, scopes ...func(*gorm.D
 	}
 	return
 }
+
+func (a *AdminIerImpl) Count(tx *gorm.DB, in *entity.Admin, scopes ...func(*gorm.DB) *gorm.DB) (count int64, err error) {
+	err = tx.Model(&entity.Admin{}).Scopes(scopes...).Where(&in).Count(&count).Error
+	if err != nil {
+		return
+	}
+	return
+}

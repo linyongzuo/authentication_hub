@@ -35,6 +35,11 @@ func (c *Client) handlerMessage(message []byte) (resp []byte) {
 		{
 			return ctrl.UserCtrl().Offline(message)
 		}
+	case request.MessageUserInfo:
+		{
+			return ctrl.AdminCtrl().UserInfo(message)
+		}
+
 	}
 	return
 }

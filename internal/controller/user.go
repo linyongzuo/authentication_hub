@@ -29,8 +29,9 @@ func (u *UserCtrl) Heartbeat(message []byte) (resp []byte, mac string) {
 	logrus.Infof("心跳:%s", string(message))
 	heartbeatResp := &response.HeartbeatResp{
 		BaseResp: response.BaseResp{
-			Code:    "200",
-			Message: "心跳成功",
+			Code:        "200",
+			Message:     "心跳成功",
+			MessageType: request.MessageHeartbeat,
 		},
 	}
 	defer func() {
@@ -60,8 +61,9 @@ func (u *UserCtrl) Heartbeat(message []byte) (resp []byte, mac string) {
 func (u *UserCtrl) Login(message []byte) (resp []byte, mac string) {
 	userLoginResp := &response.UserLoginResponse{
 		BaseResp: response.BaseResp{
-			Code:    "200",
-			Message: "用户登陆成功",
+			Code:        "200",
+			Message:     "用户登陆成功",
+			MessageType: request.MessageAdminLogin,
 		},
 	}
 	defer func() {

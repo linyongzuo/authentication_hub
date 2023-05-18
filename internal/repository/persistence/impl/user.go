@@ -34,3 +34,10 @@ func (u *UserIerImpl) Get(tx *gorm.DB, in *entity.User, scopes ...func(*gorm.DB)
 	err = tx.Model(&entity.User{}).Scopes(scopes...).Where(&in).First(&out).Error
 	return
 }
+func (u *UserIerImpl) Count(tx *gorm.DB, in *entity.User, scopes ...func(*gorm.DB) *gorm.DB) (count int64, err error) {
+	err = tx.Model(&entity.User{}).Scopes(scopes...).Where(&in).Count(&count).Error
+	if err != nil {
+		return
+	}
+	return
+}
