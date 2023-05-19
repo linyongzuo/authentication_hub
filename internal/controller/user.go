@@ -45,12 +45,15 @@ func (u *UserCtrl) Heartbeat(message []byte) (resp []byte, mac string) {
 		heartbeatResp.Message = "解析请求失败"
 		return
 	}
-	user := &entity.User{}
-	_, err = u.userIer.Get(u.db, user, filter.WithMac(req.Mac))
-	if err != nil && err == gorm.ErrRecordNotFound {
-		heartbeatResp.Code = "400"
-		heartbeatResp.Message = "该设备未认证，请认证！"
-		return
+	// 非管理员才检测
+	if !req.Admin {
+		user := &entity.User{}
+		_, err = u.userIer.Get(u.db, user, filter.WithMac(req.Mac))
+		if err != nil && err == gorm.ErrRecordNotFound {
+			heartbeatResp.Code = "400"
+			heartbeatResp.Message = "该设备未认证，请认证！"
+			return
+		}
 	}
 	mac = req.Mac
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
